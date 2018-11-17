@@ -1,0 +1,99 @@
+---
+title: "Predicting the quality of activity by its quantity - the case of barbell lift"
+author: "Tomislav Pavlović"
+date: '17th of November, 2018'
+output: html_document
+---
+
+## Background 
+
+Nowadays it is easily possible to quantify the activity level of participants by using various metrics tied to specific body parts. However, quantity often does not equal quality, indicating the need to find a way to measure quality as well. One possible approach is to use quantity, i.e., different quantitative measure, and to predict quality from them. This brief report is focused on providing an empirical answer to this question - can quality be predicted from quantity? Machine learning principles were applied in order to provide as accurate estimates as possible, and data were collected from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. More information on the data collection project can be found here:  http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+
+## Data preparation
+
+
+
+Firstly, appropriate libraries were activated in order to manipulate the data efficiently.
+
+```{r libs, echo = T, warning = F, message = F}
+lapply(c("data.table", "ggplot2", "dplyr", "caret", "randomForest"), library, character.only = T)
+```
+
+Afterwards, the data were downloaded and placed in the current working directory.
+
+```{r down, echo = T}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "../machine learning/trainset.csv", mode = "wb")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "../machine learning/testset.csv", mode = "wb")
+```
+
+Then, data were read into R and the variable "classe", which will be used as outcome, was defined as a factor variable.
+
+```{r load, echo = T}
+trainset <- fread("trainset.csv")
+testset <- fread("testset.csv")
+trainset$classe <- factor(trainset$classe)
+testset$classe <- factor(testset$classe)
+```
+
+A quick glance at the distribution of dependent variables indicates that there were slightly more cases of A category (the right way to exercise) compared to others (wrong ways to do the exercise).
+
+```{r hist1, echo = T, message = F}
+ggplot(trainset, aes(x = classe)) + geom_histogram(stat = "count")
+```
+
+Data were also checked for outliers, which were removed when detected.
+
+```{r NAloc, echo = T}
+colSums(is.na(trainset))
+colSums(is.na(testset))
+```
+
+A special function was created in order to detect missing data, which was afterwards used in order to create datasets with less missings. As a criterion, only variables with less than 90% of missing values were included into further analyses.
+
+```{r miss, echo = T}
+excl_vector <- numeric()
+for(i in 1:ncol(trainset)){ 
+  if(sum(is.na(trainset[, ..i])) >= 17660){
+   excl_vector<- c(excl_vector, i) }
+  }
+trainset_lessna <- trainset %>% select(-excl_vector)
+```
+
+Then, the original training dataset was split into two fraction, one of which was used to estimate the parameters and another which was used to cross-validate the outcomes. First seven columns were also removed from the data due to the lack of theoretical relevance for the subject.
+
+```{r split, echo = T}
+set.seed(696)
+splitindex <- createDataPartition(trainset$classe, p = 0.7, list = F)
+train1 <- trainset_lessna[splitindex, -c(1,2,3,4,5,6,7)]
+traintest <- trainset_lessna[-splitindex, -c(1,2,3,4,5,6,7)]
+```
+
+
+
+
+## Data analysis
+
+
+
+After the preparations were finished, random forest model was applied on the data.
+
+```{r rf, echo = T}
+rfModel <- randomForest(classe~., data = train1)
+rfModel
+```
+
+After forming the prediction model, it was cross-validated in order to assess its effectiveness in another context.
+
+```{r cross, echo = T}
+rfpred <- predict(rfModel, traintest)
+confusionMatrix(rfpred, traintest$classe)
+```
+
+The overall accuracy of the model was 99.44%, indicating and approximation of out-of sample error rate of 0.56%. In the end, the model was used to predict the test data.
+
+```{r predict, echo = T}
+testpredict <- predict(rfModel, testset)
+testpredict
+```
+
+Thank you for reviewing my analysis :)
